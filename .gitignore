@@ -1,0 +1,34 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb.backup
+
+# Data files
+temp_files/
+*.csv
+!dataset/**/*.csv
+# Large files that exceed GitHub's 100MB limit
+dataset/daily_dataset/.csv
+energy.csv
+
+# Models (opsiyonel - modelleri GitHub'a yüklemek istersen # işaretini kaldır)
+# *.pkl
+# *.keras
+# *.h5
+# Large model files that exceed GitHub's 100MB limit
+sarimax_model.pkl
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
