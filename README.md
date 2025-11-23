@@ -6,6 +6,9 @@ A comprehensive machine learning project for forecasting household energy consum
 
 This project analyzes energy consumption data from 5,567 London households collected between November 2011 and February 2014 as part of the UK Power Networks Low Carbon London project. The goal is to predict daily energy consumption using weather data and temporal patterns.
 
+
+https://github.com/user-attachments/assets/fd3efcd6-a154-4360-890d-23f89d76fa1d
+
 ## Dataset
 
 - **Source**: London Data Store - Low Carbon London Project
@@ -26,6 +29,8 @@ This project analyzes energy consumption data from 5,567 London households colle
   - Features: Temperature, Humidity, Wind Speed
 - **Holiday Indicator**: Binary flag for UK bank holidays
 - **Temporal Features**: Year, Month extracted from date
+<img width="1990" height="490" alt="output1" src="https://github.com/user-attachments/assets/e07e58ea-ff0a-4912-a926-8eb6fdd948b7" />
+<img width="1990" height="492" alt="output" src="https://github.com/user-attachments/assets/bc086bd1-db28-476f-9ac7-036decf24309" />
 
 ### 3. Exploratory Data Analysis
 Analyzed relationships between weather conditions and energy consumption:
@@ -63,6 +68,8 @@ Analyzed relationships between weather conditions and energy consumption:
 | Linear Regression | 2.38 | 6.61 | 191.42 | -0.16 | 0.015 |
 | Random Forest | 2.59 | 6.38 | 182.32 | -0.08 | 0.17 |
 | XGBoost | 3.51 | 8.32 | 177.51 | -0.03 | 0.17 |
+
+<img width="1542" height="975" alt="output" src="https://github.com/user-attachments/assets/01aac53c-6876-467e-86a6-ad476ffab885" />
 
 ### Key Findings
 
