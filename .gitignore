@@ -18,12 +18,10 @@ temp_files/
 dataset/daily_dataset/.csv
 energy.csv
 
-# Models (opsiyonel - modelleri GitHub'a yüklemek istersen # işaretini kaldır)
-# *.pkl
-# *.keras
-# *.h5
-# Large model files that exceed GitHub's 100MB limit
-sarimax_model.pkl
+# Model files - keep locally, don't push to GitHub
+*.pkl
+*.keras
+*.h5
 
 # IDE
 .vscode/
