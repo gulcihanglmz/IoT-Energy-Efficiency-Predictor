@@ -223,6 +223,10 @@ This project uses publicly available data from the London Data Store. Please ref
 - London Data Store for making the dataset publicly available
 - Dark Sky API for weather data
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## Contact
 
 For questions or collaboration opportunities, please reach out through GitHub issues.
