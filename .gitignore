@@ -11,7 +11,8 @@ __pycache__/
 *.ipynb.backup
 
 # Data files
-temp_files/
+temp_files/*.csv
+!temp_files/weather_energy.csv
 *.csv
 !dataset/**/*.csv
 # Large files that exceed GitHub's 100MB limit
