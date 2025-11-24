@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 import sys
 import os
+import requests
+from pathlib import Path
 
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -61,6 +63,43 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+@st.cache_resource
+def download_model():
+    """Download SARIMAX model from GitHub releases if not present"""
+    model_path = Path("sarimax_model.pkl")
+    
+    if model_path.exists():
+        return str(model_path)
+    
+    # GitHub release URL
+    url = "https://github.com/gulcihanglmz/IoT-Energy-Efficiency-Predictor/releases/download/v1.0.0/sarimax_model.pkl"
+    
+    with st.spinner("⬇️ Downloading model... (first time only)"):
+        try:
+            response = requests.get(url, stream=True, timeout=60)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            progress_bar = st.progress(0)
+            
+            with open(model_path, 'wb') as f:
+                downloaded = 0
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            progress_bar.progress(downloaded / total_size)
+            
+            progress_bar.empty()
+            st.success("✓ Model downloaded successfully!")
+            return str(model_path)
+            
+        except Exception as e:
+            st.error(f"Error downloading model: {e}")
+            raise
 
 
 def initialize_session_state():
@@ -187,8 +226,11 @@ def main():
     
     # Initialize components
     if st.sidebar.button("Initialize System", type="primary"):
-        with st.spinner("Loading model and data..."):
+        with st.spinner("Initializing..."):
             try:
+                # Download model if needed
+                model_file = download_model()
+                
                 # Initialize simulator
                 st.session_state.simulator = EnergyDataSimulator(
                     data_path=data_path,
@@ -197,7 +239,7 @@ def main():
                 st.session_state.simulator.load_data()
                 
                 # Initialize predictor
-                st.session_state.predictor = EnergyPredictor(model_path=model_path)
+                st.session_state.predictor = EnergyPredictor(model_path=model_file)
                 st.session_state.predictor.load_model()
                 
                 # Reset history
