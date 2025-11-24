@@ -227,6 +227,8 @@ This project uses publicly available data from the London Data Store. Please ref
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+For major changes, please open an issue first to discuss what you would like to change.
+
 ## Contact
 
 For questions or collaboration opportunities, please reach out through GitHub issues.
