@@ -229,6 +229,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 For major changes, please open an issue first to discuss what you would like to change.
 
+### Contributors
+
+- [@cnscyl](https://github.com/cnscyl) - Code review and testing
+- [@AysenurMadan](https://github.com/AysenurMadan) - Project review and suggestions
+
 ## Contact
 
 For questions or collaboration opportunities, please reach out through GitHub issues.
