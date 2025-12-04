@@ -362,7 +362,6 @@ def manual_input_tab():
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
-        # Visualization gauges
         st.markdown("**Live Sensor Readings**")
         
         gauge_col1, gauge_col2 = st.columns(2)
@@ -393,22 +392,18 @@ def manual_input_tab():
         if st.button("Predict Energy Consumption", type="primary", use_container_width=True):
             with st.spinner("Calculating prediction..."):
                 try:
-                    # Prepare exogenous data
                     exog_data = {
                         'weather_cluster': weather_cluster,
                         'holiday': 1 if is_holiday else 0
                     }
                     
-                    # Make prediction
                     prediction = st.session_state.predictor.predict_next(exog_data)
                     
-                    # Calculate confidence interval (simple estimation)
                     confidence = 0.95
                     std_error = prediction * 0.1
                     lower_bound = prediction - (1.96 * std_error)
                     upper_bound = prediction + (1.96 * std_error)
                     
-                    # Store prediction
                     prediction_record = {
                         'timestamp': datetime.now(),
                         'temperature': temperature,
@@ -423,13 +418,11 @@ def manual_input_tab():
                     
                     st.session_state.manual_predictions.append(prediction_record)
                     
-                    # Display result
                     st.markdown(
                         f'<div class="prediction-result">{prediction:.2f} kWh</div>',
                         unsafe_allow_html=True
                     )
                     
-                    # Metrics
                     metric_col1, metric_col2, metric_col3 = st.columns(3)
                     
                     with metric_col1:
@@ -453,7 +446,6 @@ def manual_input_tab():
                             help="Upper confidence interval"
                         )
                     
-                    # Info box
                     st.info(
                         f"**Prediction Details:**\n"
                         f"- Temperature: {temperature}°C\n"
@@ -466,7 +458,7 @@ def manual_input_tab():
                 except Exception as e:
                     st.error(f"Prediction failed: {str(e)}")
     
-    # Prediction history
+    # Prediction history - SIMPLIFIED (no styling)
     if len(st.session_state.manual_predictions) > 0:
         st.markdown("---")
         st.markdown("### Prediction History")
@@ -474,7 +466,7 @@ def manual_input_tab():
         history_df = pd.DataFrame(st.session_state.manual_predictions)
         history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
         
-        # Create a clean display dataframe
+        # Create display dataframe
         display_df = history_df.tail(10)[['timestamp', 'temperature', 'humidity', 'wind_speed', 
                                            'weather_cluster', 'is_holiday', 'prediction']].copy()
         
@@ -494,14 +486,15 @@ def manual_input_tab():
         # Format holiday
         display_df['Holiday'] = display_df['Holiday'].map({True: 'Yes', False: 'No'})
         
-        # Display
+        # Format numbers manually
+        display_df['Temp (°C)'] = display_df['Temp (°C)'].apply(lambda x: f"{x:.1f}")
+        display_df['Humidity (%)'] = display_df['Humidity (%)'].apply(lambda x: f"{x:.0f}")
+        display_df['Wind (km/h)'] = display_df['Wind (km/h)'].apply(lambda x: f"{x:.1f}")
+        display_df['Energy (kWh)'] = display_df['Energy (kWh)'].apply(lambda x: f"{x:.2f}")
+        
+        # Display WITHOUT styling (simpler, more compatible)
         st.dataframe(
-            display_df.style.format({
-                'Temp (°C)': '{:.1f}',
-                'Humidity (%)': '{:.0f}',
-                'Wind (km/h)': '{:.1f}',
-                'Energy (kWh)': '{:.2f}'
-            }).background_gradient(subset=['Energy (kWh)'], cmap='RdYlGn_r'),
+            display_df,
             use_container_width=True,
             height=400
         )
@@ -728,7 +721,7 @@ def streaming_tab():
         chart_placeholder.plotly_chart(fig, use_container_width=True)
         status_placeholder.success("Stream paused. Click 'Start Stream' to continue.")
     
-    # Data table
+    # Data table - SIMPLIFIED
     if len(st.session_state.data_stream) > 0:
         st.markdown("---")
         st.markdown("### Recent Predictions")
@@ -741,18 +734,21 @@ def streaming_tab():
         display_df = df_display[['date', 'actual', 'predicted', 'error', 'error_pct', 'temperature']].copy()
         display_df.columns = ['Date', 'Actual (kWh)', 'Predicted (kWh)', 'Error (kWh)', 'Error %', 'Temp (°C)']
         
+        # Format manually
+        display_df['Actual (kWh)'] = display_df['Actual (kWh)'].apply(lambda x: f"{x:.2f}")
+        display_df['Predicted (kWh)'] = display_df['Predicted (kWh)'].apply(lambda x: f"{x:.2f}")
+        display_df['Error (kWh)'] = display_df['Error (kWh)'].apply(lambda x: f"{x:.2f}")
+        display_df['Error %'] = display_df['Error %'].apply(lambda x: f"{x:.1f}%")
+        display_df['Temp (°C)'] = display_df['Temp (°C)'].apply(lambda x: f"{x:.1f}")
+        
+        # Display WITHOUT complex styling
         st.dataframe(
-            display_df.style.format({
-                'Actual (kWh)': '{:.2f}',
-                'Predicted (kWh)': '{:.2f}',
-                'Error (kWh)': '{:.2f}',
-                'Error %': '{:.1f}%',
-                'Temp (°C)': '{:.1f}'
-            }).background_gradient(subset=['Error %'], cmap='RdYlGn_r', vmin=0, vmax=20),
+            display_df,
             use_container_width=True,
             height=400
         )
         
+        # Summary statistics
         st.markdown("#### Stream Summary")
         col1, col2, col3, col4 = st.columns(4)
         
