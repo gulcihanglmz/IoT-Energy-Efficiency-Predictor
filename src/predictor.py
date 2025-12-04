@@ -28,17 +28,28 @@ class EnergyPredictor:
         """Load the trained SARIMAX model"""
         print(f"Loading model from {self.model_path}...")
         try:
+            # Try different protocols
             with open(self.model_path, 'rb') as f:
-                self.model = pickle.load(f)
-            print("Model loaded successfully")
+                try:
+                    self.model = pickle.load(f)
+                except Exception as e1:
+                    print(f"Protocol 5 failed, trying protocol 4: {e1}")
+                    f.seek(0)
+                    self.model = pickle.load(f, encoding='latin1')
+        
+            print("✓ Model loaded successfully")
             print(f"Model type: {type(self.model)}")
             
             # Check if model has exog
             if hasattr(self.model, 'k_exog'):
-                print(f"Model expects {self.model.k_exog} exogenous variables")
-        except FileNotFoundError:
-            print(f"Error: Model file not found at {self.model_path}")
-            print("Please ensure the SARIMAX model is trained and saved")
+                print(f"✓ Model expects {self.model.k_exog} exogenous variables")
+            else:
+                print("⚠️ WARNING: Model may not support exogenous variables")
+                
+        except Exception as e:
+            print(f"✗ Error loading model: {e}")
+            print("Using rule-based prediction as fallback")
+            self.model = None
             raise
     
     def predict_next(self, exog_data: Dict = None) -> float:
