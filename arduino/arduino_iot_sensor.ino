@@ -50,7 +50,7 @@ void loop() {
   // --- B. HATA KONTROLÜ ---
   if (isnan(nem) || isnan(sicaklik)) {
     Serial.println("HATA: DHT sensoru okunamadi! Kablolari kontrol et.");
-    bluetooth.println("{\"error\":\"DHT_FAIL\"}"); // ✅ YENİ: JSON hata
+    bluetooth.println("{\"error\":\"DHT_FAIL\"}"); 
     delay(2000);
     return;
   }
@@ -69,7 +69,7 @@ void loop() {
   jsonData += "}";
 
   // --- E. VERİ GÖNDERME ---
-  bluetooth.println(jsonData);  // ✅ DEĞİŞTİ: JSON gönder
+  bluetooth.println(jsonData);
   
   Serial.print("Gonderilen Veri: ");
   Serial.println(jsonData);
