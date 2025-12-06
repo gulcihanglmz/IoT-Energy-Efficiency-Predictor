@@ -769,6 +769,263 @@ def streaming_tab():
             st.metric("Data Points", f"{total_points}")
 
 
+def arduino_live_tab():
+    """Tab for live Arduino connection"""
+    st.markdown("### 🔌 Arduino Live Connection")
+    st.markdown("**Real-time data from Arduino sensors**")
+    
+    if st.session_state.predictor is None:
+        st.warning("⚠️ Please initialize the system first from the sidebar!")
+        return
+    
+    # Session state
+    if 'arduino_connected' not in st.session_state:
+        st.session_state.arduino_connected = False
+    if 'serial_conn' not in st.session_state:
+        st.session_state.serial_conn = None
+    if 'arduino_data' not in st.session_state:
+        st.session_state.arduino_data = []
+    if 'reading_active' not in st.session_state:
+        st.session_state.reading_active = False
+    
+    # Serial port
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        serial_port = st.text_input(
+            "Arduino Port",
+            value="COM5",
+            help="Windows: COM3, COM5 | Linux: /dev/ttyUSB0"
+        )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Connect", type="primary", use_container_width=True):
+            try:
+                import serial
+                st.session_state.serial_conn = serial.Serial(serial_port, 9600, timeout=1)
+                time.sleep(2)
+                st.session_state.arduino_connected = True
+                st.success(f"✅ Connected to {serial_port}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Connection failed: {e}")
+                st.info("Tips:\n- Check Arduino is connected\n- Correct COM port\n- Close Arduino IDE")
+    
+    # Connection status
+    if st.session_state.arduino_connected:
+        st.success("🟢 Arduino Connected & Ready")
+        
+        # Control buttons
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        
+        with col_btn1:
+            if st.button("Start Reading", disabled=st.session_state.reading_active, use_container_width=True):
+                st.session_state.reading_active = True
+                st.rerun()
+        
+        with col_btn2:
+            if st.button("Stop", disabled=not st.session_state.reading_active, use_container_width=True):
+                st.session_state.reading_active = False
+        
+        with col_btn3:
+            if st.button("Disconnect", use_container_width=True):
+                if st.session_state.serial_conn:
+                    st.session_state.serial_conn.close()
+                st.session_state.arduino_connected = False
+                st.session_state.reading_active = False
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Placeholders
+        col1, col2, col3, col4 = st.columns(4)
+        prediction_placeholder = st.empty()
+        chart_placeholder = st.empty()
+        table_placeholder = st.empty()
+        
+        # Reading loop
+        if st.session_state.reading_active:
+            try:
+                import serial
+                import json
+                
+                if st.session_state.serial_conn.in_waiting > 0:
+                    line = st.session_state.serial_conn.readline().decode('utf-8').strip()
+                    
+                    try:
+                        data = json.loads(line)
+                        
+                        # Check error
+                        if 'error' in data:
+                            st.error(f"Arduino Error: {data['error']}")
+                            time.sleep(1)
+                            st.rerun()
+                            return
+                        
+                        # Show sensor data
+                        with col1:
+                            st.metric("🌡️ Temperature", f"{data['temp']:.1f}°C")
+                        with col2:
+                            st.metric("💧 Humidity", f"{data['humidity']:.0f}%")
+                        with col3:
+                            st.metric("💡 Light", f"{data['light']}")
+                        with col4:
+                            weather_names = ['☀️ Clear', '⛅ Partly Cloudy', '☁️ Cloudy', '🌧️ Rainy', '❄️ Cold']
+                            st.metric("🌤️ Weather", weather_names[data['weather']])
+                        
+                        # Make prediction
+                        exog_data = {
+                            'weather_cluster': data['weather'],
+                            'holiday': data['holiday']
+                        }
+                        
+                        prediction = st.session_state.predictor.predict_next(exog_data)
+                        
+                        # Show prediction
+                        if prediction > 12.0:
+                            bg_color = "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)"
+                            icon = "⚠️"
+                            status = "HIGH CONSUMPTION"
+                        else:
+                            bg_color = "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)"
+                            icon = "✅"
+                            status = "NORMAL"
+                        
+                        prediction_placeholder.markdown(
+                            f'<div style="background: {bg_color}; padding: 2rem; border-radius: 1rem; '
+                            f'color: white; text-align: center; margin: 1rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+                            f'<div style="font-size: 1rem; opacity: 0.9;">{icon} {status}</div>'
+                            f'<div style="font-size: 3rem; font-weight: bold; margin: 0.5rem 0;">{prediction:.2f} kWh</div>'
+                            f'<div style="font-size: 0.9rem; opacity: 0.8;">Predicted Energy Consumption</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                        
+                        # Send back to Arduino
+                        command = f"PREDICTION:{prediction:.2f}\n"
+                        st.session_state.serial_conn.write(command.encode())
+                        
+                        # Save data
+                        st.session_state.arduino_data.append({
+                            'time': datetime.now(),
+                            'temp': data['temp'],
+                            'humidity': data['humidity'],
+                            'light': data['light'],
+                            'water': data['water'],
+                            'weather': data['weather'],
+                            'prediction': prediction
+                        })
+                        
+                        # Keep only last 50 points
+                        if len(st.session_state.arduino_data) > 50:
+                            st.session_state.arduino_data = st.session_state.arduino_data[-50:]
+                        
+                        # Chart
+                        if len(st.session_state.arduino_data) > 1:
+                            df = pd.DataFrame(st.session_state.arduino_data[-20:])
+                            
+                            fig = make_subplots(
+                                rows=2, cols=1,
+                                subplot_titles=('Energy Prediction', 'Sensor Readings'),
+                                vertical_spacing=0.15
+                            )
+                            
+                            # Energy prediction
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df['time'],
+                                    y=df['prediction'],
+                                    mode='lines+markers',
+                                    name='Energy',
+                                    line=dict(color='#667eea', width=3),
+                                    marker=dict(size=8)
+                                ),
+                                row=1, col=1
+                            )
+                            
+                            # Temperature & Humidity
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df['time'],
+                                    y=df['temp'],
+                                    mode='lines',
+                                    name='Temp',
+                                    line=dict(color='#e74c3c', width=2)
+                                ),
+                                row=2, col=1
+                            )
+                            
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df['time'],
+                                    y=df['humidity'],
+                                    mode='lines',
+                                    name='Humidity',
+                                    line=dict(color='#3498db', width=2)
+                                ),
+                                row=2, col=1
+                            )
+                            
+                            fig.update_layout(height=600, showlegend=True, hovermode='x unified')
+                            fig.update_yaxes(title_text="Energy (kWh)", row=1, col=1)
+                            fig.update_yaxes(title_text="Temp (°C) / Humidity (%)", row=2, col=1)
+                            
+                            chart_placeholder.plotly_chart(fig, use_container_width=True)
+                        
+                        # Data table
+                        if len(st.session_state.arduino_data) > 0:
+                            table_df = pd.DataFrame(st.session_state.arduino_data[-10:])
+                            table_df['time'] = table_df['time'].dt.strftime('%H:%M:%S')
+                            table_df['weather'] = table_df['weather'].map({
+                                0: 'Clear', 1: 'Partly Cloudy', 2: 'Cloudy', 3: 'Rainy', 4: 'Cold'
+                            })
+                            
+                            display_df = table_df[['time', 'temp', 'humidity', 'light', 'weather', 'prediction']].copy()
+                            display_df.columns = ['Time', 'Temp', 'Humidity', 'Light', 'Weather', 'Energy (kWh)']
+                            
+                            # Format manually (no complex styling)
+                            display_df['Temp'] = display_df['Temp'].apply(lambda x: f"{x:.1f}°C")
+                            display_df['Humidity'] = display_df['Humidity'].apply(lambda x: f"{x:.0f}%")
+                            display_df['Energy (kWh)'] = display_df['Energy (kWh)'].apply(lambda x: f"{x:.2f}")
+                            
+                            table_placeholder.dataframe(display_df, use_container_width=True, height=350)
+                        
+                        time.sleep(0.5)
+                        st.rerun()
+                        
+                    except json.JSONDecodeError:
+                        st.warning(f"⚠️Invalid data: {line}")
+                        time.sleep(0.5)
+                        st.rerun()
+                
+                else:
+                    time.sleep(0.1)
+                    st.rerun()
+                
+            except Exception as e:
+                st.error(f"Reading error: {e}")
+                st.session_state.reading_active = False
+    
+    else:
+        st.info("👆 Click ' Connect' button to start")
+        
+        st.markdown("""
+        ### Quick Setup:
+        
+        1. **Upload Arduino code** via Arduino IDE
+        2. **Connect sensors:**
+           - DHT11 → Pin 4
+           - Rain/Water Sensor → A1
+           - LDR → A0
+           - HC-05 RX → Pin 2
+           - HC-05 TX → Pin 3
+           - LED → Pin 13
+        3. **Find COM port** (Device Manager on Windows)
+        4. **Click Connect** above
+        """)
+
+
 def main():
     """Main application"""
     initialize_session_state()
@@ -857,10 +1114,11 @@ def main():
         st.sidebar.error("Predictor: Not initialized")
     
     # Main tabs
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "Manual IoT Input",
         "Forecast Mode", 
-        "Real-time Stream"
+        "Real-time Stream",
+        "Arduino Live"
     ])
     
     with tab1:
@@ -871,6 +1129,9 @@ def main():
     
     with tab3:
         streaming_tab()
+    
+    with tab4:
+        arduino_live_tab()
     
     # Footer
     st.markdown("---")
