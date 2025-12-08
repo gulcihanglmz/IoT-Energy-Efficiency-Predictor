@@ -7,6 +7,11 @@ A comprehensive machine learning project for forecasting household energy consum
 This project analyzes energy consumption data from 5,567 London households collected between November 2011 and February 2014 as part of the UK Power Networks Low Carbon London project. The goal is to predict daily energy consumption using weather data and temporal patterns.
 
 
+
+https://github.com/user-attachments/assets/2c79f7ab-c10d-4de2-bd90-cc3d8ce3ff25
+
+
+
 https://github.com/user-attachments/assets/fd3efcd6-a154-4360-890d-23f89d76fa1d
 
 ## Dataset
