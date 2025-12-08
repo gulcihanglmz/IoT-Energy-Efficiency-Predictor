@@ -842,8 +842,7 @@ def arduino_live_tab():
         if 'json_log_data' not in st.session_state:
             st.session_state.json_log_data = []
         
-        # Placeholders
-        col1, col2, col3, col4 = st.columns(4)
+        # Prediction placeholder
         prediction_placeholder = st.empty()
         
         # Chart area FIRST - so it's always visible
@@ -910,6 +909,7 @@ def arduino_live_tab():
                     st.caption(f"📊 Showing last {len(chart_data)} data points | Total: {len(st.session_state.json_log_data)} readings")
                     
                     st.markdown("---")
+                    # Energy stats
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("📊 Average", f"{df['prediction'].mean():.2f} kWh")
@@ -919,6 +919,19 @@ def arduino_live_tab():
                         st.metric("⬇️ Minimum", f"{df['prediction'].min():.2f} kWh")
                     with col4:
                         st.metric("🎯 Latest", f"{df['prediction'].iloc[-1]:.2f} kWh")
+                    
+                    # Sensor readings (from latest data)
+                    st.markdown("---")
+                    col1, col2, col3, col4 = st.columns(4)
+                    latest_entry = st.session_state.json_log_data[0]
+                    with col1:
+                        st.metric("🌡️ Temperature", latest_entry['🌡️ Temperature'])
+                    with col2:
+                        st.metric("💧 Humidity", latest_entry['💧 Humidity'])
+                    with col3:
+                        st.metric("💡 Light", latest_entry['💡 Light Level'])
+                    with col4:
+                        st.metric("🌤️ Weather", latest_entry['🌤️ Weather'])
             else:
                 data_count = len(st.session_state.json_log_data) if st.session_state.json_log_data else 0
                 st.info(f"📊 Waiting for data... ({data_count}/2 readings)")
@@ -969,17 +982,6 @@ def arduino_live_tab():
                             time.sleep(0.5)
                             st.rerun()
                             return
-                        
-                        # Show sensor data
-                        with col1:
-                            st.metric("🌡️ Temperature", f"{data['temp']:.1f}°C")
-                        with col2:
-                            st.metric("💧 Humidity", f"{data['humidity']:.0f}%")
-                        with col3:
-                            st.metric("💡 Light", f"{data['light']}")
-                        with col4:
-                            weather_names = ['☀️ Clear', '⛅ Partly Cloudy', '☁️ Cloudy', '🌧️ Rainy', '❄️ Cold']
-                            st.metric("🌤️ Weather", weather_names[data['weather']])
                         
                         # Make prediction
                         exog_data = {
