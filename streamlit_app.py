@@ -838,14 +838,95 @@ def arduino_live_tab():
         
         st.markdown("---")
         
+        # Initialize JSON log data in session state
+        if 'json_log_data' not in st.session_state:
+            st.session_state.json_log_data = []
+        
         # Placeholders
         col1, col2, col3, col4 = st.columns(4)
         prediction_placeholder = st.empty()
-        chart_placeholder = st.empty()
-        table_placeholder = st.empty()
         
-        # Reading loop
+        # Chart area FIRST - so it's always visible
+        st.markdown("---")
+        st.markdown("### 📈 Real-time Energy Consumption Chart")
+        chart_container = st.container()
+        
+        # Display area for JSON logs (below chart)
+        st.markdown("---")
+        st.markdown("#### 📊 Sensor Data History & Predictions")
+        json_log_container = st.container()
+        
+        # Display chart FIRST (before reading loop)
+        # This ensures chart is always rendered
+        with chart_container:
+            if st.session_state.json_log_data and len(st.session_state.json_log_data) >= 2:
+                # Convert json_log_data to chart format
+                chart_data = []
+                for entry in reversed(st.session_state.json_log_data[:15]):
+                    try:
+                        chart_data.append({
+                            'time': entry['⏰ Timestamp'],
+                            'prediction': float(entry['⚡ Predicted Energy'].split()[0]),
+                            'temp': float(entry['🌡️ Temperature'].replace('°C', '')),
+                            'humidity': float(entry['💧 Humidity'].replace('%', ''))
+                        })
+                    except:
+                        continue
+                
+                if len(chart_data) >= 2:
+                    df = pd.DataFrame(chart_data)
+                    
+                    fig = go.Figure()
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df['time'],
+                            y=df['prediction'],
+                            mode='lines+markers',
+                            name='Energy',
+                            line=dict(color='#00BFFF', width=4),
+                            marker=dict(size=12, color='#00BFFF', symbol='circle',
+                                      line=dict(color='white', width=2)),
+                            hovertemplate='<b>%{x}</b><br>Energy: %{y:.2f} kWh<extra></extra>'
+                        )
+                    )
+                    
+                    fig.add_hline(y=12.0, line_dash="dash", line_color="rgba(255, 0, 0, 0.6)", 
+                                line_width=2, annotation_text="⚠️ High", annotation_position="right")
+                    
+                    fig.update_layout(
+                        height=400,
+                        plot_bgcolor='#1e1e1e',
+                        paper_bgcolor='#2d2d2d',
+                        font=dict(color='white', size=12),
+                        hovermode='x unified',
+                        showlegend=False,
+                        margin=dict(l=60, r=40, t=40, b=60),
+                        xaxis=dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.2)', zeroline=False, title='Time'),
+                        yaxis=dict(showgrid=True, gridcolor='rgba(128, 128, 128, 0.2)', zeroline=False, title='Energy (kWh)'),
+                        transition=dict(duration=500, easing='cubic-in-out')
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True, key=f"energy_chart_{len(st.session_state.json_log_data)}")
+                    st.caption(f"📊 Showing last {len(chart_data)} data points | Total: {len(st.session_state.json_log_data)} readings")
+                    
+                    st.markdown("---")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📊 Average", f"{df['prediction'].mean():.2f} kWh")
+                    with col2:
+                        st.metric("⬆️ Peak", f"{df['prediction'].max():.2f} kWh")
+                    with col3:
+                        st.metric("⬇️ Minimum", f"{df['prediction'].min():.2f} kWh")
+                    with col4:
+                        st.metric("🎯 Latest", f"{df['prediction'].iloc[-1]:.2f} kWh")
+            else:
+                data_count = len(st.session_state.json_log_data) if st.session_state.json_log_data else 0
+                st.info(f"📊 Waiting for data... ({data_count}/2 readings)")
+        
+        # Reading loop (NON-BLOCKING)
         if st.session_state.reading_active:
+            st.sidebar.info("🔄 Reading active...")
+            
             try:
                 import serial
                 import json
@@ -853,13 +934,39 @@ def arduino_live_tab():
                 if st.session_state.serial_conn.in_waiting > 0:
                     line = st.session_state.serial_conn.readline().decode('utf-8').strip()
                     
+                    # Skip empty lines
+                    if not line:
+                        time.sleep(0.2)
+                        st.rerun()
+                        return
+                    
+                    # Clean up common prefixes from old Arduino code
+                    if "Gonderilen Veri:" in line:
+                        line = line.split("Gonderilen Veri:")[-1].strip()
+                    if "Gonderilen:" in line:
+                        line = line.split("Gonderilen:")[-1].strip()
+                    
+                    # Skip non-JSON lines (debug messages, weather info, etc)
+                    if not line.startswith('{'):
+                        time.sleep(0.2)
+                        st.rerun()
+                        return
+                    
                     try:
                         data = json.loads(line)
                         
                         # Check error
                         if 'error' in data:
-                            st.error(f"Arduino Error: {data['error']}")
-                            time.sleep(1)
+                            st.error(f"❌ **Arduino Hatası:** {data['error']}")
+                            time.sleep(0.5)
+                            st.rerun()
+                            return
+                        
+                        # Validate required fields
+                        required_fields = ['temp', 'humidity', 'light', 'water', 'weather', 'holiday']
+                        if not all(field in data for field in required_fields):
+                            st.warning(f"⚠️ Eksik veri alanları: {line}")
+                            time.sleep(0.5)
                             st.rerun()
                             return
                         
@@ -882,6 +989,30 @@ def arduino_live_tab():
                         
                         prediction = st.session_state.predictor.predict_next(exog_data)
                         
+                        # Add prediction to data
+                        data['predicted_energy_kwh'] = round(prediction, 2)
+                        data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Display incoming data as JSON in expandable format
+                        weather_names = ['Clear', 'Partly Cloudy', 'Cloudy', 'Rainy', 'Cold']
+                        display_data = {
+                            '⏰ Timestamp': data['timestamp'],
+                            '🌡️ Temperature': f"{data['temp']:.1f}°C",
+                            '💧 Humidity': f"{data['humidity']:.0f}%",
+                            '💡 Light Level': data['light'],
+                            '💦 Water': data['water'],
+                            '🌤️ Weather': weather_names[data['weather']],
+                            '🎉 Holiday': 'Yes' if data['holiday'] == 1 else 'No',
+                            '⚡ Predicted Energy': f"{data['predicted_energy_kwh']} kWh"
+                        }
+                        
+                        # Add to session state
+                        st.session_state.json_log_data.insert(0, display_data)
+                        
+                        # Keep only last 20 entries
+                        if len(st.session_state.json_log_data) > 20:
+                            st.session_state.json_log_data = st.session_state.json_log_data[:20]
+                        
                         # Show prediction
                         if prediction > 12.0:
                             bg_color = "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)"
@@ -894,7 +1025,7 @@ def arduino_live_tab():
                         
                         prediction_placeholder.markdown(
                             f'<div style="background: {bg_color}; padding: 2rem; border-radius: 1rem; '
-                            f'color: white; text-align: center; margin: 1rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">'
+                            f'color: white; text-align: center; margin: 1rem 0; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">'
                             f'<div style="font-size: 1rem; opacity: 0.9;">{icon} {status}</div>'
                             f'<div style="font-size: 3rem; font-weight: bold; margin: 0.5rem 0;">{prediction:.2f} kWh</div>'
                             f'<div style="font-size: 0.9rem; opacity: 0.8;">Predicted Energy Consumption</div>'
@@ -921,94 +1052,55 @@ def arduino_live_tab():
                         if len(st.session_state.arduino_data) > 50:
                             st.session_state.arduino_data = st.session_state.arduino_data[-50:]
                         
-                        # Chart
-                        if len(st.session_state.arduino_data) > 1:
-                            df = pd.DataFrame(st.session_state.arduino_data[-20:])
-                            
-                            fig = make_subplots(
-                                rows=2, cols=1,
-                                subplot_titles=('Energy Prediction', 'Sensor Readings'),
-                                vertical_spacing=0.15
-                            )
-                            
-                            # Energy prediction
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=df['time'],
-                                    y=df['prediction'],
-                                    mode='lines+markers',
-                                    name='Energy',
-                                    line=dict(color='#667eea', width=3),
-                                    marker=dict(size=8)
-                                ),
-                                row=1, col=1
-                            )
-                            
-                            # Temperature & Humidity
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=df['time'],
-                                    y=df['temp'],
-                                    mode='lines',
-                                    name='Temp',
-                                    line=dict(color='#e74c3c', width=2)
-                                ),
-                                row=2, col=1
-                            )
-                            
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=df['time'],
-                                    y=df['humidity'],
-                                    mode='lines',
-                                    name='Humidity',
-                                    line=dict(color='#3498db', width=2)
-                                ),
-                                row=2, col=1
-                            )
-                            
-                            fig.update_layout(height=600, showlegend=True, hovermode='x unified')
-                            fig.update_yaxes(title_text="Energy (kWh)", row=1, col=1)
-                            fig.update_yaxes(title_text="Temp (°C) / Humidity (%)", row=2, col=1)
-                            
-                            chart_placeholder.plotly_chart(fig, use_container_width=True)
+                        # DEBUG: Show data count
+                        st.sidebar.success(f"✅ Data saved! Total: {len(st.session_state.json_log_data)} readings")
                         
-                        # Data table
-                        if len(st.session_state.arduino_data) > 0:
-                            table_df = pd.DataFrame(st.session_state.arduino_data[-10:])
-                            table_df['time'] = table_df['time'].dt.strftime('%H:%M:%S')
-                            table_df['weather'] = table_df['weather'].map({
-                                0: 'Clear', 1: 'Partly Cloudy', 2: 'Cloudy', 3: 'Rainy', 4: 'Cold'
-                            })
-                            
-                            display_df = table_df[['time', 'temp', 'humidity', 'light', 'weather', 'prediction']].copy()
-                            display_df.columns = ['Time', 'Temp', 'Humidity', 'Light', 'Weather', 'Energy (kWh)']
-                            
-                            # Format manually (no complex styling)
-                            display_df['Temp'] = display_df['Temp'].apply(lambda x: f"{x:.1f}°C")
-                            display_df['Humidity'] = display_df['Humidity'].apply(lambda x: f"{x:.0f}%")
-                            display_df['Energy (kWh)'] = display_df['Energy (kWh)'].apply(lambda x: f"{x:.2f}")
-                            
-                            table_placeholder.dataframe(display_df, use_container_width=True, height=350)
-                        
-                        time.sleep(0.5)
+                        # Wait, then refresh to update chart
+                        time.sleep(1)
                         st.rerun()
                         
-                    except json.JSONDecodeError:
-                        st.warning(f"⚠️Invalid data: {line}")
+                    except json.JSONDecodeError as e:
+                        # Show warning but don't stop - Arduino might be sending non-JSON messages
+                        with json_log_container:
+                            st.warning(f"⚠️ Gönderilen Veri: `{line}`")
+                            st.caption(f"JSON parse hatası: {str(e)}")
+                        time.sleep(0.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Veri işleme hatası: {str(e)}")
+                        st.code(line)
                         time.sleep(0.5)
                         st.rerun()
                 
                 else:
-                    time.sleep(0.1)
+                    # No data in buffer, wait a bit then check again
+                    time.sleep(0.5)
                     st.rerun()
                 
             except Exception as e:
                 st.error(f"Reading error: {e}")
                 st.session_state.reading_active = False
+                st.rerun()
+        
+        # Display JSON logs (ALWAYS show, even when not actively reading)
+        if st.session_state.json_log_data:
+            with json_log_container:
+                for idx, entry in enumerate(st.session_state.json_log_data):
+                    is_high = float(entry['⚡ Predicted Energy'].split()[0]) > 12.0
+                    icon = "⚠️" if is_high else "✅"
+                    
+                    with st.expander(
+                        f"{icon} **{entry['⏰ Timestamp']}** - Energy: {entry['⚡ Predicted Energy']}", 
+                        expanded=(idx==0)
+                    ):
+                        cols = st.columns(2)
+                        for i, (key, value) in enumerate(entry.items()):
+                            if key != '⏰ Timestamp':
+                                cols[i % 2].markdown(f"**{key}:** {value}")
+        
     
     else:
-        st.info("👆 Click ' Connect' button to start")
+        st.info("👆 Click 'Connect' button to start")
         
         st.markdown("""
         ### Quick Setup:
